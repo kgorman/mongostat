@@ -1,0 +1,27 @@
+mongostat
+
+written by: kenny gorman 
+            www.kennygorman.com
+
+requires: 
+         python 2.4+
+         pymongo  http://api.mongodb.org/python/1.4%2B/index.html
+
+== description == 
+
+This simple program is designed to run on the command line just like other UNIX utilities like iostat run.  mongostat spits out various metrics at a interval as X per second.
+
+Usage: mongostat [options]
+
+Options:
+  -h, --help           show this help message and exit
+  --hostname=HOSTNAME  hostname to connect to
+  --port=PORT          port to connect to
+
+$>./mongostat --port=10000 --host=fred.foo.com
+    hostname                  time       query      insert      update      delete  active con  lock ratio    resident     virtual      mapped        load
+        al01   09-02-2010.17:47:46           0        5865           0           0           3        0.52       13657       71760       71598        1.72
+        al01   09-02-2010.17:47:56           0        9748           0           0           3        0.52       13690       71760       71598        1.61
+        al01   09-02-2010.17:48:06           0       12359           0           0           3        0.52       13730       71760       71598        1.51
+        al01   09-02-2010.17:48:16           0        8574           0           0           3        0.52       13734       71760       71598        1.51
+

@@ -2,7 +2,7 @@
 #
 # script to probe mongodb and get stats and report them on the command line like iostat
 # 2010 Kenny Gorman
-# v.01b
+# v.02b
 # requires: pymongo
 #
 
@@ -15,9 +15,8 @@ import commands
 # get command line input
 parser = OptionParser()
 parser.set_defaults(database="test",hostname="localhost",port="27017")
-parser.add_option("-d","--database", dest="database", help="database name to connect to")
-parser.add_option("-n","--hostname", dest="hostname",help="hostname to connect to")
-parser.add_option("-p","--port",dest="port",type=int,help="port to connect to")
+parser.add_option("--hostname", dest="hostname",help="hostname to connect to")
+parser.add_option("--port",dest="port",type=int,help="port to connect to")
 (options, args) = parser.parse_args()
 
 connection = Connection(options.hostname, options.port, slave_okay=True)
