@@ -12,6 +12,7 @@ from pymongo import Connection
 from optparse import OptionParser
 import commands
 import signal
+from urlparse import urlparse
 
 class MongoStat:
     
@@ -24,12 +25,65 @@ class MongoStat:
         parser.add_option("--port",dest="port",type=int,help="port to connect to")
         (options, args) = parser.parse_args()
 
-        connection = Connection(options.hostname, options.port, slave_okay=True)
+        db_address = None
+        if len(args) > 0:
+            db_address = args[0]
+
+        if db_address:
+            (hosts, database, username, password) = self._parse_uri(db_address)
+            if len(hosts) == 2:
+                connection = Connection.paired(*hosts)
+            else:
+                connection = Connection(*hosts[0])
+        else:
+            connection = Connection(options.hostname, options.port, slave_okay=True)
+
         self.db = connection.database
 
         self.setSignalHandler()
         self.printStats()
-        
+
+    def __partition(self, source, sub):
+        i = source.find(sub)
+        if i == -1:
+            return (source, None)
+        return (source[:i], source[i+len(sub):])
+
+    def _parse_uri(self, uri):
+        info = {}
+ 
+        if uri.startswith("mongodb://"):
+            uri = uri[len("mongodb://"):]
+        elif "://" in uri:
+            raise Exception("Invalid uri scheme: %s" % self.__partition(uri, "://")[0])
+ 
+        (hosts, database) = self.__partition(uri, "/")
+ 
+        if not database:
+            database = None
+ 
+        username = None
+        password = None
+        if "@" in hosts:
+            (auth, hosts) = self.__partition(hosts, "@")
+ 
+            if ":" not in auth:
+                raise Exception("auth must be specified as 'username:password@'")
+            (username, password) = self.__partition(auth, ":")
+ 
+        host_list = []
+        for host in hosts.split(","):
+            if not host:
+                raise Exception("empty host (or extra comma in host list)")
+            (hostname, port) = self.__partition(host, ":")
+            if port:
+                port = int(port)
+            else:
+                port = 27017
+            host_list.append((hostname, port))
+ 
+        return (host_list, database, username, password)
+
 
     # get the load avg.  needs to be mucked for platforms other than linux
     def getload(self):
@@ -43,8 +97,7 @@ class MongoStat:
 
 
     def thetime(self):
-      thedate = datetime.datetime.now().strftime("%d-%m-%Y.%H:%M:%S")
-      return thedate
+      return datetime.datetime.now().strftime("%d-%m-%Y.%H:%M:%S")
 
     def hostname(self):
       hostname = commands.getstatusoutput('hostname')
@@ -83,7 +136,7 @@ class MongoStat:
             pd = d
             
             # fetch the stats
-            data = ( self.db._command( { "serverStatus" : 1 } ) )
+            data = ( self.db.command( { "serverStatus" : 1 } ) )
 
             lok = round(float(data['globalLock']['ratio']),2)
             res = int(data['mem']['resident'])
