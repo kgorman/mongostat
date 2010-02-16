@@ -11,72 +11,121 @@ import pymongo
 from pymongo import Connection
 from optparse import OptionParser
 import commands
+import signal
 
-# get command line input
-parser = OptionParser()
-parser.set_defaults(database="test",hostname="localhost",port="27017")
-parser.add_option("--hostname", dest="hostname",help="hostname to connect to")
-parser.add_option("--port",dest="port",type=int,help="port to connect to")
-(options, args) = parser.parse_args()
+class MongoStat:
+    
+    def __init__(self):
 
-connection = Connection(options.hostname, options.port, slave_okay=True)
-db = connection.database
+        # get command line input
+        parser = OptionParser()
+        parser.set_defaults(database="test",hostname="localhost",port="27017")
+        parser.add_option("--hostname", dest="hostname",help="hostname to connect to")
+        parser.add_option("--port",dest="port",type=int,help="port to connect to")
+        (options, args) = parser.parse_args()
 
-# get the load avg.  needs to be mucked for platforms other than linux
-def getload():
-  if (sys.platform == 'linux2'):
-    cmd="cat /proc/loadavg"
-    out=commands.getstatusoutput(cmd)
-    load=out[1].split()[0]
-  else:
-	load=0
-  return load
+        connection = Connection(options.hostname, options.port, slave_okay=True)
+        self.db = connection.database
+
+        self.setSignalHandler()
+        self.printStats()
+        
+
+    # get the load avg.  needs to be mucked for platforms other than linux
+    def getload(self):
+      if (sys.platform == 'linux2'):
+        cmd = "cat /proc/loadavg"
+        out = commands.getstatusoutput(cmd)
+        load = out[1].split()[0]
+      else:
+        load = 0
+      return load
 
 
-def thetime():
-  thedate=datetime.datetime.now().strftime("%d-%m-%Y.%H:%M:%S")
-  return thedate
+    def thetime(self):
+      thedate = datetime.datetime.now().strftime("%d-%m-%Y.%H:%M:%S")
+      return thedate
 
-def hostname():
-  hostname=commands.getstatusoutput('hostname')
-  return hostname[1][0:12]
+    def hostname(self):
+      hostname = commands.getstatusoutput('hostname')
+      return hostname[1][0:12]
 
-data=[]
-sleep=10
-q=0
-i=0
-u=0
-d=0
-ii=0
-con=0
-lok=0
-hostname=hostname()
+    def getVersion(self):
+        return self.db.version()
 
-# just run forever until ctrl-c
-while True:
-	
-	# set previous values before overwriting
-	pq=q
-	pi=i
-	pu=u
-	pd=d
-	
-	# fetch the stats
-	data=( db._command( { "serverStatus" : 1 } ) )
-	q=int(data['opcounters']['query'])
-	i=int(data['opcounters']['insert'])
-	u=int(data['opcounters']['update'])
-	d=int(data['opcounters']['delete'])
-	con=int(data['connections']['current'])
-	lok=round(float(data['globalLock']['ratio']),2)
-	res=int(data['mem']['resident'])
-	vir=int(data['mem']['virtual'])
-	mapd=int(data['mem']['mapped'])
-	
-	# nice print output
-	if (ii % 25 == 0):
-	   print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % ("hostname","time","query","insert","update","delete","active con","lock ratio","resident","virtual","mapped","load")
-	print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % (hostname,thetime(),(q-pq)/sleep,(i-pi)/sleep,(u-pu)/sleep,(d-pd)/sleep,con,lok,res,vir,mapd,getload())
-	ii+=1
-	
-	time.sleep(sleep)
+    def setSignalHandler(self):
+        def handler(signal, frame):
+            print "Goodbye!"
+            sys.exit()
+
+        signal.signal(signal.SIGINT, handler)
+
+    def printStats(self):
+        
+        data = []
+        sleep = 10
+        q = 0
+        i = 0
+        u = 0
+        d = 0
+        ii = 0
+        con = 0
+        lok = 0
+        hostname = self.hostname()
+
+        # just run forever until ctrl-c
+        while True:
+            
+            # set previous values before overwriting
+            pq = q
+            pi = i
+            pu = u
+            pd = d
+            
+            # fetch the stats
+            data = ( self.db._command( { "serverStatus" : 1 } ) )
+
+            lok = round(float(data['globalLock']['ratio']),2)
+            res = int(data['mem']['resident'])
+            vir = int(data['mem']['virtual'])
+            mapd = int(data['mem']['mapped'])
+            
+            if "opcounters" in data:
+                q = int(data['opcounters']['query'])
+                i = int(data['opcounters']['insert'])
+                u = int(data['opcounters']['update'])
+                d = int(data['opcounters']['delete'])
+                con = int(data['connections']['current'])
+                
+                # nice print output
+                if (ii % 25 == 0):
+                    print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % (
+                        "hostname", "time", "query", "insert", "update", 
+                        "delete", "active con", "lock ratio", "resident",
+                        "virtual","mapped","load"
+                    )
+
+                print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % (
+                        hostname, self.thetime(), (q-pq)/sleep, (i-pi)/sleep,
+                        (u-pu)/sleep, (d-pd)/sleep, con, lok, res, vir, mapd, self.getload()
+                )
+            else:
+                template = "%12s%22s%12s%12s%12s%12s%12s"
+                # nice print output
+                if (ii % 25 == 0):
+                    print template % (
+                        "hostname", "time", "lock ratio", "resident",
+                        "virtual", "mapped", "load"
+                    )
+
+                print template % (
+                        hostname, self.thetime(), lok, res, vir, mapd, self.getload()
+                )
+
+            ii += 1
+            
+            time.sleep(sleep)
+
+if __name__ == "__main__":
+    MongoStat()
+
