@@ -2,7 +2,7 @@
 #
 # script to probe mongodb and get stats and report them on the command line like iostat
 # 2010 Kenny Gorman
-# v.02b
+# v.03b
 # requires: pymongo
 #
 
