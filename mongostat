@@ -2,7 +2,7 @@
 #
 # script to probe mongodb and get stats and report them on the command line like iostat
 # 2010 Kenny Gorman
-# v.03b
+# v.04b
 # requires: pymongo
 #
 
@@ -125,6 +125,9 @@ class MongoStat:
         con = 0
         lok = 0
         hostname = self.hostname()
+        idx_b_a = 0
+        idx_b_h = 0
+        idx_b_m = 0
 
         # just run forever until ctrl-c
         while True:
@@ -134,6 +137,9 @@ class MongoStat:
             pi = i
             pu = u
             pd = d
+            pidx_b_a = idx_b_a
+            pidx_b_h = idx_b_h
+            pidx_b_m = idx_b_m
             
             # fetch the stats
             data = ( self.db.command( { "serverStatus" : 1 } ) )
@@ -142,39 +148,41 @@ class MongoStat:
             res = int(data['mem']['resident'])
             vir = int(data['mem']['virtual'])
             mapd = int(data['mem']['mapped'])
-            
+
+            template="%12s%22s%12s%12s%12s%12s%12s"
+            header=('hostname', 'time', 'lock ratio', 'resident','virtual', 'mapped', 'load')
+            datastr="hostname, self.thetime(), lok, res, vir, mapd, self.getload()"
+
             if "opcounters" in data:
                 q = int(data['opcounters']['query'])
                 i = int(data['opcounters']['insert'])
                 u = int(data['opcounters']['update'])
                 d = int(data['opcounters']['delete'])
                 con = int(data['connections']['current'])
-                
-                # nice print output
-                if (ii % 25 == 0):
-                    print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % (
-                        "hostname", "time", "query", "insert", "update", 
-                        "delete", "active con", "lock ratio", "resident",
-                        "virtual","mapped","load"
-                    )
-
-                print "%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s" % (
-                        hostname, self.thetime(), (q-pq)/sleep, (i-pi)/sleep,
-                        (u-pu)/sleep, (d-pd)/sleep, con, lok, res, vir, mapd, self.getload()
-                )
-            else:
-                template = "%12s%22s%12s%12s%12s%12s%12s"
-                # nice print output
-                if (ii % 25 == 0):
-                    print template % (
-                        "hostname", "time", "lock ratio", "resident",
-                        "virtual", "mapped", "load"
-                    )
-
-                print template % (
-                        hostname, self.thetime(), lok, res, vir, mapd, self.getload()
-                )
-
+              
+                template="%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s"
+                header=('hostname', 'time', 'query', 'insert', 'update',  \
+                        'delete', 'active con', 'lock ratio', 'resident', \
+                        'virtual','mapped','load')
+                datastr="hostname, self.thetime(), (q-pq)/sleep, (i-pi)/sleep,(u-pu)/sleep, (d-pd)/sleep, con, lok, res, vir, mapd, self.getload()"
+      
+            # opcounters will be in data if indexcounters is
+            if "indexCounters" in data:
+                idx_b_a = int(data['indexCounters']['btree']['accesses'])
+                idx_b_h = int(data['indexCounters']['btree']['hits'])
+                idx_b_m = int(data['indexCounters']['btree']['misses'])
+                idx_b_o = round(float(data['indexCounters']['btree']['missRatio']),2)
+                template="%12s%22s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s%12s"
+                header=('hostname', 'time', 'query', 'insert', 'update',  \
+                        'delete', 'active con', 'lock ratio', 'resident', \
+                        'virtual','mapped','idx acc','idx hit','idx miss','idx ratio','load')
+                datastr="hostname, self.thetime(), (q-pq)/sleep, (i-pi)/sleep,(u-pu)/sleep, (d-pd)/sleep, \
+                         con, lok, res, vir, mapd, (idx_b_a-pidx_b_a)/sleep, (idx_b_h-pidx_b_h)/sleep, (idx_b_m-pidx_b_m)/sleep, idx_b_o, self.getload()"
+	            
+            if (ii % 25 == 0):
+	            print template % header
+            print template % (eval(datastr))
+           
             ii += 1
             
             time.sleep(sleep)
